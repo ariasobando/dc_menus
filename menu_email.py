@@ -25,14 +25,14 @@ LOCATIONS = {
 }
 
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-MEALS = ["Breakfast", "Brunch", "Lunch", "Dinner", "Late Night"]
+MEALS = ["Breakfast", "Lunch", "Dinner"]
 
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "salad bar", "salad selections", "deli bar", "panini deli bar", "boiled eggs",
-    "oatmeal", "oatmeal elevated", "the parfait palette", "plain bagel",
-    "locally grown sticky rice", "scrambled egg", "bacon",
+    "salad bar", "salad selections", "deli bar",
+    "oatmeal", "oatmeal elevated",
+    "locally grown sticky rice"
 }
 
 
