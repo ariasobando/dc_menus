@@ -27,7 +27,7 @@ LOCATIONS = {
 }
 
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-MEALS = ["Breakfast", "Brunch", "Lunch", "Dinner", "Late Night"]
+MEALS = ["Breakfast", "Lunch", "Dinner"]
 
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
@@ -39,7 +39,7 @@ SKIP_DISHES = {
 # highlighted. Add/remove freely -- partial words are fine, e.g. "pupusa" matches
 # "Pork Pupusas" too.
 FAVORITES = [
-    "pupusa", "cubano", "burger bar",
+    "pupusa", "cubano", "congee", "muffin", "french toast", "burger bar",
 ]
 
 DIET_STYLES = {
