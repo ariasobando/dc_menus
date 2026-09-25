@@ -39,7 +39,7 @@ SKIP_DISHES = {
 # highlighted. Add/remove freely -- partial words are fine, e.g. "pupusa" matches
 # "Pork Pupusas" too.
 FAVORITES = [
-    "pupusa", "cubano", "congee", "muffin", "french toast", "burger bar",
+    "pupusa", "cubano", "muffin", "french toast", "burger bar",
 ]
 
 DIET_STYLES = {
