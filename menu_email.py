@@ -30,9 +30,7 @@ MEALS = ["Breakfast", "Lunch", "Dinner"]
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "salad bar", "salad selections", "deli bar",
-    "oatmeal", "oatmeal elevated",
-    "locally grown sticky rice"
+    "too lazy to remove this vibe-coded part"
 }
 
 
