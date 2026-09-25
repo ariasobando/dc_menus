@@ -2,7 +2,7 @@
 name: daily-menu
 on:
   schedule:
-    - cron: "0 14 * * *"   # 14:00 UTC = 7:00 AM PDT (6:00 AM PST after Nov 1). GitHub cron is UTC-only.
+    - cron: "41 13 * * *"   # 14:00 UTC = 7:00 AM PDT (6:00 AM PST after Nov 1). GitHub cron is UTC-only.
   workflow_dispatch: {}     # lets you click "Run workflow" to test
 
 jobs:
