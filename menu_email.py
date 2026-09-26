@@ -42,7 +42,7 @@ SKIP_DISHES = {
 # "Pork Pupusas" too.
 FAVORITES = [
     "pupusa", "cubano", "burger bar", "muffin", "french toast",
-    "BYO", "(BYO) burger", "build your own"
+    "byo", "build your own", "(byo) burger",
 ]
 
 # Zones that should be folded into one compact grey line instead of full listing
@@ -57,37 +57,8 @@ DIET_STYLES = {
     "Halal": ("#e6eefc", "#2a4d8f"),
 }
 
-# Matches things like "11:00 am - 1:30 pm", "11:00-1:30pm", "11am-2pm"
-TIME_RANGE_RE = re.compile(
-    r"\d{1,2}(:\d{2})?\s*(am|pm)?\s*[-\u2013]\s*\d{1,2}(:\d{2})?\s*(am|pm)",
-    re.IGNORECASE,
-)
-
-
-def find_time_near(tag) -> str:
-    """Look at a meal heading's own text and its next couple of siblings for a
-    time range like '11:00 AM - 1:30 PM'. Returns '' if none found. The site
-    sometimes prints hours right in the heading, sometimes in a small tag right
-    after it, so we check both.
-    """
-    own = TIME_RANGE_RE.search(tag.get_text(" ", strip=True))
-    if own:
-        return own.group(0)
-    node = tag
-    for _ in range(4):
-        node = node.find_next_sibling()
-        if node is None:
-            break
-        m = TIME_RANGE_RE.search(node.get_text(" ", strip=True))
-        if m:
-            return m.group(0)
-        if node.name in ("h1", "h2", "h3", "h4", "h5"):
-            break
-    return ""
-
-
 def parse_menu(html: str, day_name: str) -> dict:
-    """Return {meal: {"time": str, "items": [(zone, dish, tags), ...]}} for one day."""
+    """Return {meal: [(zone, dish, tags), ...]} for one day."""
     soup = BeautifulSoup(html, "html.parser")
     headings = soup.find_all(["h1", "h2", "h3", "h4", "h5"])
     day = meal = zone = None
@@ -95,17 +66,13 @@ def parse_menu(html: str, day_name: str) -> dict:
 
     for idx, tag in enumerate(headings):
         text = " ".join(tag.get_text(" ", strip=True).split())
-        # Meal headings sometimes carry the time inline, e.g. "Lunch 11:00 AM - 1:30 PM";
-        # strip that off before comparing to MEALS.
-        bare = TIME_RANGE_RE.sub("", text).strip()
         if text in DAYS:
             day, meal, zone = text, None, None
             continue
         if day != day_name:
             continue
-        if bare in MEALS:
-            meal, zone = bare, None
-            menu.setdefault(meal, {"time": find_time_near(tag), "items": []})
+        if text in MEALS:
+            meal, zone = text, None
         elif text.endswith(" Zone"):
             zone = text[: -len(" Zone")]
         elif meal and tag.find("a", href=re.compile(r"^#collapse")):
@@ -121,7 +88,7 @@ def parse_menu(html: str, day_name: str) -> dict:
                         tags.add(alt)
                 if sib.name in ("h1", "h2", "h3", "h4", "h5"):
                     break
-            bucket = menu.setdefault(meal, {"time": "", "items": []})["items"]
+            bucket = menu.setdefault(meal, [])
             if not any(z == (zone or "") and d == text for z, d, _ in bucket):
                 bucket.append((zone or "", text, frozenset(tags)))
     return menu
@@ -165,25 +132,18 @@ def render_location(name: str, menu: dict, url: str) -> str:
         )
 
     meals = dict(menu)
-    if "Lunch" in meals and meals.get("Lunch", {}).get("items") == meals.get("Dinner", {}).get("items"):
-        lunch = meals.pop("Lunch")
-        dinner = meals.pop("Dinner")
-        times = " &amp; ".join(t for t in (lunch["time"], dinner["time"]) if t)
-        meals["Lunch & Dinner"] = {"time": times, "items": lunch["items"]}
+    if "Lunch" in meals and meals.get("Lunch") == meals.get("Dinner"):
+        meals["Lunch & Dinner"] = meals.pop("Lunch")
+        meals.pop("Dinner")
 
     html_parts = [header]
-    for meal, info in meals.items():
-        time_html = (
-            f'<span style="font-weight:400;text-transform:none;color:#999;">'
-            f' &middot; {escape(info["time"])}</span>' if info["time"] else ""
-        )
+    for meal, items in meals.items():
         html_parts.append(
             f'<div style="margin:14px 0 4px;font-size:13px;font-weight:700;'
-            f'text-transform:uppercase;letter-spacing:.04em;color:#555;">'
-            f'{escape(meal)}{time_html}</div>'
+            f'text-transform:uppercase;letter-spacing:.04em;color:#555;">{escape(meal)}</div>'
         )
         by_zone: dict = {}
-        for zone, dish, tags in info["items"]:
+        for zone, dish, tags in items:
             by_zone.setdefault(zone, []).append((dish, tags))
 
         condensed_names = []
@@ -216,6 +176,8 @@ def build_email_html() -> str:
         '<div style="font-size:12px;color:#999;">'
         '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (not everything is tagged '
         'on the site) &nbsp;&nbsp; grey lines = desserts/bakery/beverages, condensed</div>',
+        '<div style="font-size:12px;color:#999;margin-bottom:8px;">'
+        'Station hours are on the DC\u2019s own site, not repeated here.</div>',
     ]
     for name, url in LOCATIONS.items():
         try:
