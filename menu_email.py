@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Email today's UC Davis dining menus as a formatted HTML email.
 
-Env vars: GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO (optional, defaults to GMAIL_USER)
-Usage:    python menu_email.py            # send email
+Sends one individual email per recipient (nobody sees anyone else's address).
+
+Env vars: GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO (comma-separated; defaults to GMAIL_USER)
+Usage:    python menu_email.py            # send emails
           python menu_email.py --print    # print HTML source (for testing)
-          python menu_email.py --preview  # write preview.html and open-able locally
+          python menu_email.py --preview  # write preview.html, viewable locally
 """
 import os
 import re
@@ -32,15 +34,21 @@ MEALS = ["Breakfast", "Lunch", "Dinner"]
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "too lazy to remove this vibe-coded part",
+    "too lazy to remove this vibe coded part",
 }
 
 # Any dish whose name contains one of these (case-insensitive) gets starred and
 # highlighted. Add/remove freely -- partial words are fine, e.g. "pupusa" matches
 # "Pork Pupusas" too.
 FAVORITES = [
-    "pupusa", "cubano", "muffin", "french toast", "burger bar",
+    "pupusa", "cubano", "burger bar", "muffin", "french toast",
+    "BYO", "(BYO) burger", "build your own"
 ]
+
+# Zones that should be folded into one compact grey line instead of full listing
+# with badges -- for stuff where you just want the names, not the detail.
+# Matched case-insensitively against the zone name (e.g. "Dessert Zone" -> "Dessert").
+CONDENSE_ZONES = {"dessert", "desserts", "bakery", "beverages", "condiments"}
 
 DIET_STYLES = {
     # label shown -> (background, text color)
@@ -49,16 +57,37 @@ DIET_STYLES = {
     "Halal": ("#e6eefc", "#2a4d8f"),
 }
 
+# Matches things like "11:00 am - 1:30 pm", "11:00-1:30pm", "11am-2pm"
+TIME_RANGE_RE = re.compile(
+    r"\d{1,2}(:\d{2})?\s*(am|pm)?\s*[-\u2013]\s*\d{1,2}(:\d{2})?\s*(am|pm)",
+    re.IGNORECASE,
+)
+
+
+def find_time_near(tag) -> str:
+    """Look at a meal heading's own text and its next couple of siblings for a
+    time range like '11:00 AM - 1:30 PM'. Returns '' if none found. The site
+    sometimes prints hours right in the heading, sometimes in a small tag right
+    after it, so we check both.
+    """
+    own = TIME_RANGE_RE.search(tag.get_text(" ", strip=True))
+    if own:
+        return own.group(0)
+    node = tag
+    for _ in range(4):
+        node = node.find_next_sibling()
+        if node is None:
+            break
+        m = TIME_RANGE_RE.search(node.get_text(" ", strip=True))
+        if m:
+            return m.group(0)
+        if node.name in ("h1", "h2", "h3", "h4", "h5"):
+            break
+    return ""
+
 
 def parse_menu(html: str, day_name: str) -> dict:
-    """Return {meal: [(zone, dish, tags), ...]} for one day.
-
-    The page lists the whole week as headings: Day > Meal > "X Zone" > dish (a link
-    to #collapseN, followed by a description paragraph and small dietary-icon
-    images). I classify headings by text rather than tag level so small markup
-    changes don't break it, and I scan forward from each dish heading to the next
-    heading to pick up its dietary icons.
-    """
+    """Return {meal: {"time": str, "items": [(zone, dish, tags), ...]}} for one day."""
     soup = BeautifulSoup(html, "html.parser")
     headings = soup.find_all(["h1", "h2", "h3", "h4", "h5"])
     day = meal = zone = None
@@ -66,19 +95,22 @@ def parse_menu(html: str, day_name: str) -> dict:
 
     for idx, tag in enumerate(headings):
         text = " ".join(tag.get_text(" ", strip=True).split())
+        # Meal headings sometimes carry the time inline, e.g. "Lunch 11:00 AM - 1:30 PM";
+        # strip that off before comparing to MEALS.
+        bare = TIME_RANGE_RE.sub("", text).strip()
         if text in DAYS:
             day, meal, zone = text, None, None
             continue
         if day != day_name:
             continue
-        if text in MEALS:
-            meal, zone = text, None
+        if bare in MEALS:
+            meal, zone = bare, None
+            menu.setdefault(meal, {"time": find_time_near(tag), "items": []})
         elif text.endswith(" Zone"):
             zone = text[: -len(" Zone")]
         elif meal and tag.find("a", href=re.compile(r"^#collapse")):
             if text.lower() in SKIP_DISHES:
                 continue
-            # Collect dietary icons between this heading and the next one.
             tags = set()
             for sib in tag.find_all_next():
                 if sib in headings[idx + 1:idx + 2]:
@@ -89,10 +121,9 @@ def parse_menu(html: str, day_name: str) -> dict:
                         tags.add(alt)
                 if sib.name in ("h1", "h2", "h3", "h4", "h5"):
                     break
-            item = (zone or "", text, frozenset(tags))
-            bucket = menu.setdefault(meal, [])
-            if not any(z == item[0] and d == item[1] for z, d, _ in bucket):
-                bucket.append(item)
+            bucket = menu.setdefault(meal, {"time": "", "items": []})["items"]
+            if not any(z == (zone or "") and d == text for z, d, _ in bucket):
+                bucket.append((zone or "", text, frozenset(tags)))
     return menu
 
 
@@ -134,25 +165,42 @@ def render_location(name: str, menu: dict, url: str) -> str:
         )
 
     meals = dict(menu)
-    if "Lunch" in meals and meals.get("Lunch") == meals.get("Dinner"):
-        meals["Lunch & Dinner"] = meals.pop("Lunch")
-        meals.pop("Dinner")
+    if "Lunch" in meals and meals.get("Lunch", {}).get("items") == meals.get("Dinner", {}).get("items"):
+        lunch = meals.pop("Lunch")
+        dinner = meals.pop("Dinner")
+        times = " &amp; ".join(t for t in (lunch["time"], dinner["time"]) if t)
+        meals["Lunch & Dinner"] = {"time": times, "items": lunch["items"]}
 
     html_parts = [header]
-    for meal, items in meals.items():
+    for meal, info in meals.items():
+        time_html = (
+            f'<span style="font-weight:400;text-transform:none;color:#999;">'
+            f' &middot; {escape(info["time"])}</span>' if info["time"] else ""
+        )
         html_parts.append(
             f'<div style="margin:14px 0 4px;font-size:13px;font-weight:700;'
-            f'text-transform:uppercase;letter-spacing:.04em;color:#555;">{escape(meal)}</div>'
+            f'text-transform:uppercase;letter-spacing:.04em;color:#555;">'
+            f'{escape(meal)}{time_html}</div>'
         )
         by_zone: dict = {}
-        for zone, dish, tags in items:
+        for zone, dish, tags in info["items"]:
             by_zone.setdefault(zone, []).append((dish, tags))
+
+        condensed_names = []
         for zone, dishes in by_zone.items():
+            if zone.lower() in CONDENSE_ZONES:
+                condensed_names.extend(d for d, _ in dishes)
+                continue
             zone_label = f'<b>{escape(zone)}:</b> ' if zone else ""
             rows = ", ".join(render_dish(d) + render_tags(t) for d, t in dishes)
             html_parts.append(
                 f'<div style="margin:2px 0 2px 8px;font-size:14px;line-height:1.5;">'
                 f'{zone_label}{rows}</div>'
+            )
+        if condensed_names:
+            html_parts.append(
+                f'<div style="margin:2px 0 2px 8px;font-size:13px;line-height:1.5;'
+                f'color:#888;">{escape(", ".join(condensed_names))}</div>'
             )
     return "".join(html_parts)
 
@@ -166,8 +214,8 @@ def build_email_html() -> str:
         f'<h1 style="font-size:20px;margin-bottom:0;">UC Davis Dining</h1>',
         f'<div style="color:#666;font-size:13px;margin-bottom:8px;">{now:%A, %B %d}</div>',
         '<div style="font-size:12px;color:#999;">'
-        '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (dishes with none aren\u2019t '
-        'necessarily meat/dairy &mdash; the site doesn\u2019t tag everything)</div>',
+        '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (not everything is tagged '
+        'on the site) &nbsp;&nbsp; grey lines = desserts/bakery/beverages, condensed</div>',
     ]
     for name, url in LOCATIONS.items():
         try:
@@ -183,17 +231,24 @@ def build_email_html() -> str:
     return "".join(body)
 
 
-def send(html: str) -> None:
+def send_all(html: str) -> None:
     user = os.environ["GMAIL_USER"]
-    msg = EmailMessage()
-    msg["Subject"] = f"Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
-    msg["From"] = user
-    msg["To"] = os.environ.get("MAIL_TO", user)
-    msg.set_content("This email requires HTML support to view.")
-    msg.add_alternative(html, subtype="html")
+    password = os.environ["GMAIL_APP_PASSWORD"]
+    recipients = [
+        e.strip() for e in os.environ.get("MAIL_TO", user).split(",") if e.strip()
+    ]
+    subject = f"Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
+
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-        s.login(user, os.environ["GMAIL_APP_PASSWORD"])
-        s.send_message(msg)
+        s.login(user, password)
+        for to in recipients:
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = user
+            msg["To"] = to  # one recipient per message -- nobody sees the others
+            msg.set_content("This email requires HTML support to view.")
+            msg.add_alternative(html, subtype="html")
+            s.send_message(msg)
 
 
 if __name__ == "__main__":
@@ -205,4 +260,4 @@ if __name__ == "__main__":
             f.write(html)
         print("Wrote preview.html")
     else:
-        send(html)
+        send_all(html)
