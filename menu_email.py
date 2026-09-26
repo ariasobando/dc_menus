@@ -31,10 +31,47 @@ LOCATIONS = {
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 MEALS = ["Breakfast", "Lunch", "Dinner"]
 
+# Zone hours, entered manually from the site's "Zone Hours" tab (not scraped --
+# that tab has a different layout than the menu, and hours rarely change).
+# "weekday" = Mon-Fri, "weekend" = Sat-Sun. A zone with no entry just shows no
+# hours next to it. Add other locations here the same way once you have them.
+ZONE_HOURS = {
+    "Segundo DC": {
+        "weekday": {
+            "Breakfast": {
+                "Red": "7-11 AM", "Yellow": "7-10:15 AM", "Purple": "Closed",
+                "Blue": "Closed", "Green": "7-11 AM", "Pink": "7-11 AM",
+            },
+            "Lunch": {
+                "Red": "11:30 AM-2, 4-5 PM", "Yellow": "11:30 AM-2 PM", "Purple": "11 AM-5 PM",
+                "Blue": "11 AM-3:30 PM", "Green": "11 AM-5 PM", "Pink": "11 AM-5 PM",
+            },
+            "Dinner": {
+                "Red": "5-10 PM", "Yellow": "5-10 PM", "Purple": "5-10 PM",
+                "Blue": "5-8 PM", "Green": "5-10 PM", "Pink": "5-10 PM",
+            },
+        },
+        "weekend": {
+            "Breakfast": {
+                "Red": "9-11 AM", "Yellow": "9-11 AM", "Purple": "Closed",
+                "Blue": "Closed", "Green": "9-11 AM", "Pink": "9-11 AM",
+            },
+            "Lunch": {
+                "Red": "11-1:30, 2-5 PM", "Yellow": "11 AM-5 PM", "Purple": "11 AM-5 PM",
+                "Blue": "Closed", "Green": "11 AM-5 PM", "Pink": "11 AM-5 PM",
+            },
+            "Dinner": {
+                "Red": "5-8 PM", "Yellow": "5-8 PM", "Purple": "5-8 PM",
+                "Blue": "Closed", "Green": "5-8 PM", "Pink": "5-8 PM",
+            },
+        },
+    },
+}
+
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "too lazy to remove this vibe coded part",
+    "too lazy to remove this vibe-coded part",
 }
 
 # Any dish whose name contains one of these (case-insensitive) gets starred and
@@ -44,11 +81,6 @@ FAVORITES = [
     "pupusa", "cubano", "burger bar", "muffin", "french toast",
     "byo", "build your own", "(byo) burger",
 ]
-
-# Zones that should be folded into one compact grey line instead of full listing
-# with badges -- for stuff where you just want the names, not the detail.
-# Matched case-insensitively against the zone name (e.g. "Dessert Zone" -> "Dessert").
-CONDENSE_ZONES = {"dessert", "desserts", "bakery", "beverages", "condiments"}
 
 DIET_STYLES = {
     # label shown -> (background, text color)
@@ -120,7 +152,7 @@ def render_tags(tags: frozenset) -> str:
     return "".join(out)
 
 
-def render_location(name: str, menu: dict, url: str) -> str:
+def render_location(name: str, menu: dict, url: str, day_kind: str) -> str:
     header = (
         f'<h2 style="margin:28px 0 6px;font-size:18px;border-bottom:2px solid #DAAA00;'
         f'padding-bottom:4px;">{escape(name)}</h2>'
@@ -131,13 +163,10 @@ def render_location(name: str, menu: dict, url: str) -> str:
             f'closed, or the page layout changed. <a href="{url}">Check the site</a>.</p>'
         )
 
-    meals = dict(menu)
-    if "Lunch" in meals and meals.get("Lunch") == meals.get("Dinner"):
-        meals["Lunch & Dinner"] = meals.pop("Lunch")
-        meals.pop("Dinner")
+    loc_hours = ZONE_HOURS.get(name, {}).get(day_kind, {})
 
     html_parts = [header]
-    for meal, items in meals.items():
+    for meal, items in menu.items():
         html_parts.append(
             f'<div style="margin:14px 0 4px;font-size:13px;font-weight:700;'
             f'text-transform:uppercase;letter-spacing:.04em;color:#555;">{escape(meal)}</div>'
@@ -145,22 +174,18 @@ def render_location(name: str, menu: dict, url: str) -> str:
         by_zone: dict = {}
         for zone, dish, tags in items:
             by_zone.setdefault(zone, []).append((dish, tags))
-
-        condensed_names = []
+        meal_hours = loc_hours.get(meal, {})
         for zone, dishes in by_zone.items():
-            if zone.lower() in CONDENSE_ZONES:
-                condensed_names.extend(d for d, _ in dishes)
-                continue
-            zone_label = f'<b>{escape(zone)}:</b> ' if zone else ""
+            hours = meal_hours.get(zone, "")
+            hours_html = (
+                f' <span style="color:#999;font-weight:400;">({escape(hours)})</span>'
+                if hours else ""
+            )
+            zone_label = f'<b>{escape(zone)}</b>{hours_html}: ' if zone else ""
             rows = ", ".join(render_dish(d) + render_tags(t) for d, t in dishes)
             html_parts.append(
                 f'<div style="margin:2px 0 2px 8px;font-size:14px;line-height:1.5;">'
                 f'{zone_label}{rows}</div>'
-            )
-        if condensed_names:
-            html_parts.append(
-                f'<div style="margin:2px 0 2px 8px;font-size:13px;line-height:1.5;'
-                f'color:#888;">{escape(", ".join(condensed_names))}</div>'
             )
     return "".join(html_parts)
 
@@ -168,22 +193,22 @@ def render_location(name: str, menu: dict, url: str) -> str:
 def build_email_html() -> str:
     now = datetime.now(ZoneInfo("America/Los_Angeles"))
     day_name = DAYS[(now.weekday() + 1) % 7]  # Python: Monday=0; site starts at Sunday
+    day_kind = "weekend" if now.weekday() >= 5 else "weekday"  # Sat=5, Sun=6
     body = [
         '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
         'max-width:600px;margin:0 auto;color:#222;">',
         f'<h1 style="font-size:20px;margin-bottom:0;">UC Davis Dining</h1>',
         f'<div style="color:#666;font-size:13px;margin-bottom:8px;">{now:%A, %B %d}</div>',
-        '<div style="font-size:12px;color:#999;">'
-        '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (not everything is tagged '
-        'on the site) &nbsp;&nbsp; grey lines = desserts/bakery/beverages, condensed</div>',
         '<div style="font-size:12px;color:#999;margin-bottom:8px;">'
-        'Station hours are on the DC\u2019s own site, not repeated here.</div>',
+        '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (not everything is tagged '
+        'on the site) &nbsp;&nbsp; hours in parentheses are entered manually, only Segundo '
+        'for now, and assume the schedule hasn\u2019t changed since it was entered</div>',
     ]
     for name, url in LOCATIONS.items():
         try:
             r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (menu-emailer)"})
             r.raise_for_status()
-            body.append(render_location(name, parse_menu(r.text, day_name), url))
+            body.append(render_location(name, parse_menu(r.text, day_name), url, day_kind))
         except Exception as e:  # keep going if one site fails
             body.append(
                 f'<h2 style="margin:28px 0 6px;font-size:18px;">{escape(name)}</h2>'
