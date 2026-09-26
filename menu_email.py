@@ -66,12 +66,77 @@ ZONE_HOURS = {
             },
         },
     },
+    "Tercero DC": {
+        "weekday": {
+            "Breakfast": {
+                "Red": "Closed", "Yellow": "7-10:30 AM", "Purple": "Closed",
+                "Blue": "7-11 AM", "Green": "7-11 AM", "Pink": "7-11 AM",
+            },
+            "Lunch": {
+                "Red": "11 AM-5 PM", "Yellow": "11 AM-2 PM", "Purple": "11 AM-5 PM",
+                "Blue": "11:30 AM-4 PM", "Green": "11 AM-5 PM", "Pink": "11 AM-5 PM",
+            },
+            "Dinner": {
+                "Red": "5-10 PM", "Yellow": "5-10 PM", "Purple": "5-10 PM",
+                "Blue": "5-10 PM", "Green": "5-10 PM", "Pink": "5-10 PM",
+            },
+        },
+        "weekend": {
+            "Breakfast": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                           "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+            "Lunch": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                      "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+            "Dinner": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                       "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+        },
+    },
+    "Cuarto DC": {
+        "weekday": {
+            "Breakfast": {
+                "Red": "7-11 AM", "Yellow": "7-11 AM", "Purple": "Closed",
+                "Blue": "Closed", "Green": "7-11 AM", "Pink": "7-11 AM",
+            },
+            "Lunch": {
+                "Red": "11 AM-5 PM", "Yellow": "11 AM-2 PM", "Purple": "11 AM-5 PM",
+                "Blue": "11 AM-5 PM", "Green": "11 AM-5 PM", "Pink": "11 AM-5 PM",
+            },
+            "Dinner": {
+                "Red": "5-10 PM", "Yellow": "5-10 PM", "Purple": "5-10 PM",
+                "Blue": "5-10 PM", "Green": "5-10 PM", "Pink": "5-10 PM",
+            },
+        },
+        "weekend": {
+            "Breakfast": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                           "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+            "Lunch": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                      "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+            "Dinner": {"Red": "Closed", "Yellow": "Closed", "Purple": "Closed",
+                       "Blue": "Closed", "Green": "Closed", "Pink": "Closed"},
+        },
+    },
+    "Latitude": {
+        # Latitude's page calls this tab "Platform Hours" and only has 4 zones
+        # (no Purple/Pink).
+        "weekday": {
+            "Breakfast": {"Red": "8-10:30 AM", "Blue": "8-10:30 AM",
+                          "Yellow": "8-10:30 AM", "Green": "8-10:30 AM"},
+            "Lunch": {"Red": "10:30 AM-4:30 PM", "Blue": "10:30 AM-3 PM",
+                      "Yellow": "10:30 AM-4:30 PM", "Green": "10:30 AM-3 PM"},
+            "Dinner": {"Red": "4:30-8 PM", "Blue": "4:30-8 PM",
+                       "Yellow": "4:30-8 PM", "Green": "4:30-8 PM"},
+        },
+        "weekend": {
+            "Breakfast": {"Red": "Closed", "Blue": "Closed", "Yellow": "Closed", "Green": "Closed"},
+            "Lunch": {"Red": "Closed", "Blue": "Closed", "Yellow": "Closed", "Green": "Closed"},
+            "Dinner": {"Red": "Closed", "Blue": "Closed", "Yellow": "Closed", "Green": "Closed"},
+        },
+    },
 }
 
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "too lazy to remove this vibe-coded part",
+    "too lazy to remove this vibe coded part",
 }
 
 # Any dish whose name contains one of these (case-insensitive) gets starred and
@@ -199,10 +264,11 @@ def build_email_html() -> str:
         'max-width:600px;margin:0 auto;color:#222;">',
         f'<h1 style="font-size:20px;margin-bottom:0;">UC Davis Dining</h1>',
         f'<div style="color:#666;font-size:13px;margin-bottom:8px;">{now:%A, %B %d}</div>',
-        '<div style="font-size:12px;color:#999;margin-bottom:8px;">'
-        '\u2b50 = favorite &nbsp;&nbsp; badges = dietary info (not everything is tagged '
-        'on the site) &nbsp;&nbsp; hours in parentheses are entered manually, only Segundo '
-        'for now, and assume the schedule hasn\u2019t changed since it was entered</div>',
+        '<div style="font-size:12px;color:#999;margin-bottom:2px;">\u2b50 = favorite</div>',
+        '<div style="font-size:12px;color:#999;margin-bottom:2px;">badges = dietary info '
+        '(not everything is tagged on the site)</div>',
+        '<div style="font-size:12px;color:#999;margin-bottom:8px;">hours in parentheses '
+        'are entered manually and assume the schedule hasn\u2019t changed since it was entered</div>',
     ]
     for name, url in LOCATIONS.items():
         try:
