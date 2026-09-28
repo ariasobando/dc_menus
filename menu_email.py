@@ -144,7 +144,7 @@ SKIP_DISHES = {
 # "Pork Pupusas" too.
 FAVORITES = [
     "pupusa", "cubano", "burger bar", "muffin", "french toast",
-    "byo", "build your own", "(byo) burger",
+    "byo", "build your own", "(byo) burger", "cheesesteak",
 ]
 
 DIET_STYLES = {
