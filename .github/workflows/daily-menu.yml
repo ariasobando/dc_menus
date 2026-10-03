@@ -1,9 +1,7 @@
 # Save as .github/workflows/daily-menu.yml in a GitHub repo containing menu_email.py
 name: daily-menu
 on:
-  schedule:
-    - cron: "41 13 * * *"   # 14:00 UTC = 7:00 AM PDT (6:00 AM PST after Nov 1). GitHub cron is UTC-only.
-  workflow_dispatch: {}     # lets you click "Run workflow" to test
+  workflow_dispatch: {}     # lets cron-job.org (or you, manually) trigger a run
 
 jobs:
   send:
