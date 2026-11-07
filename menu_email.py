@@ -19,7 +19,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 LOCATIONS = {
     "Segundo DC": "https://housing.ucdavis.edu/dining/dining-commons/segundo/",
@@ -27,6 +27,21 @@ LOCATIONS = {
     "Cuarto DC": "https://housing.ucdavis.edu/dining/dining-commons/cuarto/",
     "Latitude": "https://housing.ucdavis.edu/dining/latitude/",
 }
+
+FOOD_TRUCKS_URL = "https://housing.ucdavis.edu/dining/food-trucks/"
+
+# Aggie Eats truck: entered manually from aggiecompass.ucdavis.edu/aggieeats (that page
+# says locations are subject to change, so recheck it now and then).
+# Keys are Python weekday numbers: Monday=0 ... Sunday=6. Days not listed = not running.
+AGGIE_EATS_URL = "https://aggiecompass.ucdavis.edu/aggieeats/food-truck"
+AGGIE_EATS_SCHEDULE = {
+    0: "Memorial Union, East Quad",
+    1: "Storer Hall",
+    2: "Memorial Union, East Quad",
+    3: "Storer Hall",
+    4: "Memorial Union, East Quad",
+}
+AGGIE_EATS_TIME = "11:30 AM–2 PM or until sold out"
 
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 MEALS = ["Breakfast", "Lunch", "Dinner"]
@@ -136,7 +151,7 @@ ZONE_HOURS = {
 # Staples that are always there; hide them so the email is just the interesting stuff.
 # Set to set() to see everything.
 SKIP_DISHES = {
-    "too lazy to remove this vibe coded part",
+    "forgot to remove this vibe coded part",
 }
 
 # Any dish whose name contains one of these (case-insensitive) gets starred and
@@ -144,7 +159,7 @@ SKIP_DISHES = {
 # "Pork Pupusas" too.
 FAVORITES = [
     "pupusa", "cubano", "burger bar", "muffin", "french toast",
-    "byo", "build your own", "(byo) burger", "cheesesteak",
+    "byo", "build your own", "cheesesteak",
 ]
 
 DIET_STYLES = {
@@ -255,6 +270,138 @@ def render_location(name: str, menu: dict, url: str, day_kind: str) -> str:
     return "".join(html_parts)
 
 
+# --- Food trucks -----------------------------------------------------------
+# The housing page is organized as: a heading per date ("Monday, October 05, 2026"),
+# a heading per location ("Quad", "Silo Patio"), then one line per truck
+# ("Star Ginger — 10 a.m. to 3 p.m."). Weekend days say "No Trucks Scheduled Today".
+# We match by full DATE, not weekday name, so a stale week on the page is reported as
+# "no schedule posted" instead of showing the wrong trucks.
+_MONTH_FORMATS = ("%B %d %Y", "%b %d %Y")
+DATE_HEADING_RE = re.compile(
+    r"^##\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+"
+    r"([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})\s*$"
+)
+_TIME_RANGE = (
+    r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?\s*(?:to|-|–)\s*"
+    r"\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?"
+)
+TRUCK_RE = re.compile(
+    rf"^(?P<name>.+?)\s*(?:—|–|\s-\s)\s*(?P<time>{_TIME_RANGE})\s*$",
+    re.IGNORECASE,
+)
+
+
+def _heading_date(line: str):
+    m = DATE_HEADING_RE.match(line)
+    if not m:
+        return None
+    for fmt in _MONTH_FORMATS:
+        try:
+            return datetime.strptime(f"{m.group(1)} {m.group(2)} {m.group(3)}", fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def compact_time(t: str) -> str:
+    """'10 a.m. to 3 p.m.' -> '10 AM–3 PM'"""
+    t = re.sub(r"\s+", " ", t.strip())
+    t = re.sub(r"([ap])\.?m\.?", lambda m: m.group(1).upper() + "M", t, flags=re.IGNORECASE)
+    return re.sub(r"\s+to\s+|\s*[-–]\s*", "–", t)
+
+
+def parse_food_trucks(html: str, today):
+    """Return {location: [(truck, time), ...]} for `today`, {} if the page says no
+    trucks, or None if the page has no section for today's date."""
+    soup = BeautifulSoup(html, "html.parser")
+    # Mark headings, flatten inline tags, and normalize whitespace so that every
+    # heading / paragraph / <br>-separated truck ends up as exactly one line of text.
+    for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+        h.string = "##" + " ".join(h.get_text(" ", strip=True).split())
+    for t in soup.find_all(["strong", "b", "em", "i", "span", "a"]):
+        t.unwrap()
+    soup.smooth()
+    for s in soup.find_all(string=True):
+        if type(s) is NavigableString:
+            s.replace_with(re.sub(r"\s+", " ", s))
+    lines = [ln.strip() for ln in soup.get_text("\n").split("\n") if ln.strip()]
+
+    current = location = None
+    seen_today = False
+    by_location: dict = {}
+    for ln in lines:
+        d = _heading_date(ln)
+        if d is not None:
+            current, location = d, None
+            seen_today = seen_today or d == today
+            continue
+        if current != today:
+            continue
+        if ln.startswith("##"):
+            location = ln[2:].strip()
+            continue
+        m = TRUCK_RE.match(ln)
+        if m and location:
+            item = (m.group("name").strip(), compact_time(m.group("time")))
+            bucket = by_location.setdefault(location, [])
+            if item not in bucket:
+                bucket.append(item)
+    return by_location if seen_today else None
+
+
+def render_food_trucks(by_location, url: str) -> str:
+    if by_location is None:
+        return (
+            '<div style="margin:2px 0 2px 8px;font-size:13px;color:#888;">No schedule posted '
+            f'for today on the site yet &mdash; <a href="{url}">check it</a>.</div>'
+        )
+    if not by_location:
+        return '<div style="margin:2px 0 2px 8px;font-size:14px;">No trucks scheduled today.</div>'
+    rows = []
+    for loc, items in by_location.items():
+        by_time: dict = {}
+        for name, t in items:
+            by_time.setdefault(t, []).append(name)
+        groups = "; ".join(
+            f'{escape(", ".join(names))} <span style="color:#999;">({escape(t)})</span>'
+            for t, names in by_time.items()
+        )
+        rows.append(
+            f'<div style="margin:2px 0 2px 8px;font-size:14px;line-height:1.5;">'
+            f'<b>{escape(loc)}:</b> {groups}</div>'
+        )
+    return "".join(rows)
+
+
+def render_aggie_eats(weekday: int) -> str:
+    loc = AGGIE_EATS_SCHEDULE.get(weekday)
+    if not loc:
+        return ""
+    return (
+        '<div style="margin:8px 0 2px 8px;font-size:14px;line-height:1.5;">'
+        f'<b>Aggie Eats:</b> {escape(loc)} '
+        f'<span style="color:#999;">({escape(AGGIE_EATS_TIME)})</span> '
+        '<span style="color:#999;font-size:12px;">&middot; schedule entered manually, '
+        f'location subject to change &middot; <a href="{AGGIE_EATS_URL}">menu &amp; updates</a></span>'
+        '</div>'
+    )
+
+
+def render_food_trucks_section(now) -> str:
+    parts = [
+        '<h2 style="margin:28px 0 6px;font-size:18px;border-bottom:2px solid #DAAA00;'
+        'padding-bottom:4px;">Food Trucks</h2>'
+    ]
+    try:
+        r = requests.get(FOOD_TRUCKS_URL, timeout=30, headers={"User-Agent": "Mozilla/5.0 (menu-emailer)"})
+        r.raise_for_status()
+        parts.append(render_food_trucks(parse_food_trucks(r.text, now.date()), FOOD_TRUCKS_URL))
+    except Exception as e:  # still show Aggie Eats if the housing page is down
+        parts.append(f'<p style="color:#c00;font-size:13px;">Fetch failed: {escape(str(e))}</p>')
+    parts.append(render_aggie_eats(now.weekday()))
+    return "".join(parts)
+
+
 def build_email_html() -> str:
     now = datetime.now(ZoneInfo("America/Los_Angeles"))
     day_name = DAYS[(now.weekday() + 1) % 7]  # Python: Monday=0; site starts at Sunday
@@ -280,6 +427,7 @@ def build_email_html() -> str:
                 f'<h2 style="margin:28px 0 6px;font-size:18px;">{escape(name)}</h2>'
                 f'<p style="color:#c00;font-size:13px;">Fetch failed: {escape(str(e))}</p>'
             )
+    body.append(render_food_trucks_section(now))
     body.append("</div>")
     return "".join(body)
 
