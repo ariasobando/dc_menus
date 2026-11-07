@@ -438,7 +438,7 @@ def send_all(html: str) -> None:
     recipients = [
         e.strip() for e in os.environ.get("MAIL_TO", user).split(",") if e.strip()
     ]
-    subject = f"Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
+    subject = f"*FOOD TRUCKS + AGGIE EATS ADDED* Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
         s.login(user, password)
