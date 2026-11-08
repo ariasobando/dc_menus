@@ -43,6 +43,35 @@ AGGIE_EATS_SCHEDULE = {
 }
 AGGIE_EATS_TIME = "11:30 AM–2 PM or until sold out"
 
+# Weekly menu, entered manually (the site only posts it as an image). Same weekday
+# numbers as above. Each item is (name, diet badges, allergens it contains).
+# Badges must be "Vegan" or "Vegetarian". Update this each time the weekly menu changes.
+AGGIE_EATS_MENU = {
+    0: [
+        ("Vegan fajita bowl", ["Vegan"], []),
+        ("Beef barbacoa rice bowl", [], []),
+    ],
+    1: [
+        ("Penne pasta w/ meatballs and breadsticks", [], ["gluten", "soy", "dairy"]),
+        ("Penne pasta w/ falafel balls and breadsticks", ["Vegan"], ["gluten", "soy"]),
+    ],
+    2: [
+        ("BBQ chicken tenders w/ potatoes and coleslaw", [], ["gluten", "dairy"]),
+        ("BBQ tofu w/ potatoes and coleslaw", ["Vegan"], ["soy"]),
+    ],
+    3: [
+        ("Beef barbacoa w/ cilantro rice and green beans", [], []),
+        ("Battered mushrooms w/ cilantro rice and green beans", ["Vegetarian"],
+         ["soy", "gluten", "sesame"]),
+    ],
+    4: [
+        ("Teriyaki tenders w/ mac salad, sticky rice, and cabbage", [],
+         ["gluten", "soy", "sesame"]),
+        ("Umami battered mushrooms w/ mac salad, sticky rice, and cabbage", ["Vegetarian"],
+         ["gluten", "soy"]),
+    ],
+}
+
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 MEALS = ["Breakfast", "Lunch", "Dinner"]
 
@@ -377,14 +406,26 @@ def render_aggie_eats(weekday: int) -> str:
     loc = AGGIE_EATS_SCHEDULE.get(weekday)
     if not loc:
         return ""
-    return (
+    parts = [
         '<div style="margin:8px 0 2px 8px;font-size:14px;line-height:1.5;">'
         f'<b>Aggie Eats:</b> {escape(loc)} '
-        f'<span style="color:#999;">({escape(AGGIE_EATS_TIME)})</span> '
-        '<span style="color:#999;font-size:12px;">&middot; schedule entered manually, '
-        f'location subject to change &middot; <a href="{AGGIE_EATS_URL}">menu &amp; updates</a></span>'
-        '</div>'
+        f'<span style="color:#999;">({escape(AGGIE_EATS_TIME)})</span></div>'
+    ]
+    for name, diet, contains in AGGIE_EATS_MENU.get(weekday, []):
+        allergens = (
+            f' <span style="color:#999;font-size:12px;">contains {escape(", ".join(contains))}</span>'
+            if contains else ""
+        )
+        parts.append(
+            '<div style="margin:2px 0 2px 24px;font-size:14px;line-height:1.5;">'
+            f'{render_dish(name)}{render_tags(frozenset(diet))}{allergens}</div>'
+        )
+    parts.append(
+        '<div style="margin:2px 0 2px 24px;font-size:12px;color:#999;">menu and schedule entered '
+        'manually; items and location can change up to the day of service &middot; '
+        f'<a href="{AGGIE_EATS_URL}">menu &amp; updates</a></div>'
     )
+    return "".join(parts)
 
 
 def render_food_trucks_section(now) -> str:
@@ -438,7 +479,7 @@ def send_all(html: str) -> None:
     recipients = [
         e.strip() for e in os.environ.get("MAIL_TO", user).split(",") if e.strip()
     ]
-    subject = f"*FOOD TRUCKS + AGGIE EATS ADDED* Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
+    subject = f"Dining menus - {datetime.now(ZoneInfo('America/Los_Angeles')):%a %b %d}"
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
         s.login(user, password)
@@ -455,10 +496,12 @@ def send_all(html: str) -> None:
 if __name__ == "__main__":
     html = build_email_html()
     if "--print" in sys.argv:
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to a narrower encoding
         print(html)
     elif "--preview" in sys.argv:
-        with open("preview.html", "w") as f:
-            f.write(html)
+        # utf-8 on both the file and the <meta> tag so the star and dashes display correctly
+        with open("preview.html", "w", encoding="utf-8") as f:
+            f.write('<!doctype html><meta charset="utf-8">' + html)
         print("Wrote preview.html")
     else:
         send_all(html)
