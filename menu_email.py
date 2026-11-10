@@ -48,26 +48,26 @@ AGGIE_EATS_TIME = "11:30 AM–2 PM or until sold out"
 # Badges must be "Vegan" or "Vegetarian". Update this each time the weekly menu changes.
 AGGIE_EATS_MENU = {
     0: [
-        ("Vegan fajita bowl", ["Vegan"], []),
-        ("Beef barbacoa rice bowl", [], []),
+        ("Vegan Fajita Bowl", ["Vegan"], []),
+        ("Tri Tip Rice Bowl", [], []),
     ],
     1: [
-        ("Penne pasta w/ meatballs and breadsticks", [], ["gluten", "soy", "dairy"]),
-        ("Penne pasta w/ falafel balls and breadsticks", ["Vegan"], ["gluten", "soy"]),
+        ("Penne Pasta w/ Meatballs & Breadsticks", [], ["gluten", "soy", "dairy"]),
+        ("Penne Pasta w/ Falafel Balls & Breadsticks", ["Vegan"], ["gluten", "soy"]),
     ],
     2: [
-        ("BBQ chicken tenders w/ potatoes and coleslaw", [], ["gluten", "dairy"]),
-        ("BBQ tofu w/ potatoes and coleslaw", ["Vegan"], ["soy"]),
+        ("BBQ Chicken Tenders w/ Potatoes & Coleslaw", [], ["gluten", "dairy"]),
+        ("BBQ Tofu w/ Potatoes and Coleslaw", ["Vegan"], ["soy"]),
     ],
     3: [
-        ("Beef barbacoa w/ cilantro rice and green beans", [], []),
-        ("Battered mushrooms w/ cilantro rice and green beans", ["Vegetarian"],
+        ("Roasted Pork Loin w/ Cilantro Rice & Green Beans", [], []),
+        ("Battered Mushrooms w/ Cilantro Rice & green beans", ["Vegetarian"],
          ["soy", "gluten", "sesame"]),
     ],
     4: [
-        ("Teriyaki tenders w/ mac salad, sticky rice, and cabbage", [],
-         ["gluten", "soy", "sesame"]),
-        ("Umami battered mushrooms w/ mac salad, sticky rice, and cabbage", ["Vegetarian"],
+        ("Teriyaki Tenders w/ Mac Salad, Sticky Rice, & Cabbage", [],
+         ["gluten", "soy"]),
+        ("Umami Battered Mushrooms w/ Mac Salad, Sticky Rice, & Cabbage", ["Vegetarian"],
          ["gluten", "soy"]),
     ],
 }
