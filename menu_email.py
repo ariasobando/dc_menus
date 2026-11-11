@@ -60,7 +60,7 @@ AGGIE_EATS_MENU = {
         ("BBQ Tofu w/ Potatoes and Coleslaw", ["Vegan"], ["soy"]),
     ],
     3: [
-        ("Roasted Pork Loin w/ Cilantro Rice & Green Beans", [], []),
+        ("Roasted Pork Loin w/ Cilantro Rice & Green Beans", [], ["pork"]),
         ("Battered Mushrooms w/ Cilantro Rice & green beans", ["Vegetarian"],
          ["soy", "gluten", "sesame"]),
     ],
